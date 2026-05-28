@@ -1,0 +1,221 @@
+use crate::{Chunk, sigil, render, decode_nested, read_kv, kv, encode_nested, table_chunk};
+use std::collections::HashMap;
+
+// ── Typed molecule data structs ───────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct Text { pub content: String }
+
+#[derive(Debug, Clone)]
+pub struct Annotation { pub content: String }
+
+#[derive(Debug, Clone)]
+pub struct Neuron { pub name: String }
+
+#[derive(Debug, Clone)]
+pub struct Log { pub level: String, pub source: String, pub message: String }
+
+#[derive(Debug, Clone)]
+pub struct ErrorMsg { pub level: String, pub source: String, pub message: String }
+
+#[derive(Debug, Clone)]
+pub struct Status { pub code: i32 }
+
+#[derive(Debug, Clone)]
+pub struct Progress { pub id: u64, pub label: String, pub current: u64, pub total: u64 }
+
+#[derive(Debug, Clone)]
+pub struct Action { pub label: String, pub target: String }
+
+#[derive(Debug, Clone)]
+pub struct Component { pub children: Vec<Molecule> }
+
+#[derive(Debug, Clone)]
+pub struct Scope { pub children: Vec<Molecule> }
+
+/// Table with pre-decoded string cells (matches the v0 render path).
+#[derive(Debug, Clone)]
+pub struct Table { pub headers: Vec<String>, pub rows: Vec<Vec<String>> }
+
+// ── Molecule enum ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum Molecule {
+    Text(Text),
+    Annotation(Annotation),
+    Neuron(Neuron),
+    Log(Log),
+    Error(ErrorMsg),
+    Status(Status),
+    Progress(Progress),
+    Action(Action),
+    Component(Component),
+    Scope(Scope),
+    Table(Table),
+    Unknown { sigil: u8, render: u8, payload: bytes::Bytes },
+}
+
+impl Molecule {
+    /// Decode a `Chunk` into its typed `Molecule` representation.
+    pub fn from_chunk(c: &Chunk) -> Self {
+        match (c.sigil, c.render) {
+            (sigil::HAX, render::TEXT) =>
+                Molecule::Text(Text { content: str_payload(&c.payload) }),
+
+            (sigil::SIG, render::TEXT) =>
+                Molecule::Annotation(Annotation { content: str_payload(&c.payload) }),
+
+            (sigil::PAT, render::TEXT) => {
+                let raw = str_payload(&c.payload);
+                let name = if raw.starts_with('@') { raw } else { format!("@{raw}") };
+                Molecule::Neuron(Neuron { name })
+            }
+
+            (sigil::DOT, render::LOG) => {
+                let m = read_kv(&c.payload);
+                Molecule::Log(Log {
+                    level:   kv_str(&m, "level",   "info"),
+                    source:  kv_str(&m, "source",  ""),
+                    message: kv_str(&m, "message", ""),
+                })
+            }
+
+            (sigil::ZAP, render::ERROR) => {
+                let m = read_kv(&c.payload);
+                Molecule::Error(ErrorMsg {
+                    level:   kv_str(&m, "level",   "error"),
+                    source:  kv_str(&m, "source",  ""),
+                    message: kv_str(&m, "message", "unknown error"),
+                })
+            }
+
+            (sigil::DOT, render::STATUS) => {
+                let m = read_kv(&c.payload);
+                let code = m.get("code")
+                    .and_then(|c| String::from_utf8_lossy(&c.payload).parse().ok())
+                    .unwrap_or(0);
+                Molecule::Status(Status { code })
+            }
+
+            (sigil::DOT, render::PROGRESS) => {
+                let m = read_kv(&c.payload);
+                let u64v = |key: &str| -> u64 {
+                    m.get(key)
+                        .and_then(|c| String::from_utf8_lossy(&c.payload).parse().ok())
+                        .unwrap_or(0)
+                };
+                Molecule::Progress(Progress {
+                    id:      u64v("id"),
+                    label:   kv_str(&m, "label",   ""),
+                    current: u64v("current"),
+                    total:   u64v("total"),
+                })
+            }
+
+            (sigil::ZAP, render::COMPONENT) => {
+                let chunks = decode_nested(&c.payload);
+                let mut label  = String::new();
+                let mut target = String::new();
+                for inner in &chunks {
+                    if inner.sigil == sigil::SIG && inner.render == render::TEXT {
+                        label = str_payload(&inner.payload);
+                    } else if inner.sigil == sigil::HAX && inner.render == render::TEXT {
+                        target = str_payload(&inner.payload);
+                    }
+                }
+                if label.is_empty() { label = "action".into(); }
+                Molecule::Action(Action { label, target })
+            }
+
+            (sigil::BAR, render::COMPONENT) => {
+                let children = decode_nested(&c.payload)
+                    .iter().map(Molecule::from_chunk).collect();
+                Molecule::Component(Component { children })
+            }
+
+            (sigil::FAS, render::COMPONENT) => {
+                let children = decode_nested(&c.payload)
+                    .iter().map(Molecule::from_chunk).collect();
+                Molecule::Scope(Scope { children })
+            }
+
+            (sigil::HAX, render::TABLE) => {
+                let rows = decode_nested(&c.payload);
+                let mut headers: Vec<String>        = Vec::new();
+                let mut data_rows: Vec<Vec<String>>  = Vec::new();
+                for row in &rows {
+                    if row.sigil == sigil::FAS && row.render == render::STRUCT {
+                        for h in decode_nested(&row.payload) {
+                            headers.push(str_payload(&h.payload));
+                        }
+                    } else if row.sigil == sigil::COL && row.render == render::STRUCT {
+                        let cells = decode_nested(&row.payload);
+                        data_rows.push(cells.iter().map(|c| str_payload(&c.payload)).collect());
+                    }
+                }
+                Molecule::Table(Table { headers, rows: data_rows })
+            }
+
+            _ => Molecule::Unknown { sigil: c.sigil, render: c.render, payload: c.payload.clone() },
+        }
+    }
+
+    /// Encode back to a `Chunk` (lossless for all typed variants).
+    pub fn to_chunk(&self) -> Chunk {
+        match self {
+            Molecule::Text(t)       => Chunk::text(&t.content),
+            Molecule::Annotation(a) => Chunk::annotation(&a.content),
+            Molecule::Neuron(n)     => Chunk::new(sigil::PAT, render::TEXT,
+                bytes::Bytes::copy_from_slice(n.name.as_bytes())),
+            Molecule::Log(l)        => Chunk::log(&l.level, &l.source, &l.message),
+            Molecule::Error(e)      => {
+                let payload = encode_nested(&[
+                    kv("level",   Chunk::text(&e.level)),
+                    kv("source",  Chunk::text(&e.source)),
+                    kv("message", Chunk::text(&e.message)),
+                ]);
+                Chunk::new(sigil::ZAP, render::ERROR, payload)
+            }
+            Molecule::Status(s)     => Chunk::status(s.code),
+            Molecule::Progress(p)   => Chunk::progress(p.id, &p.label, p.current, p.total),
+            Molecule::Action(a)     => {
+                let payload = encode_nested(&[
+                    Chunk::annotation(&a.label),
+                    Chunk::text(&a.target),
+                ]);
+                Chunk::new(sigil::ZAP, render::COMPONENT, payload)
+            }
+            Molecule::Component(c)  => {
+                let payload = encode_nested(&c.children.iter()
+                    .map(|m| m.to_chunk()).collect::<Vec<_>>());
+                Chunk::new(sigil::BAR, render::COMPONENT, payload)
+            }
+            Molecule::Scope(s)      => {
+                let payload = encode_nested(&s.children.iter()
+                    .map(|m| m.to_chunk()).collect::<Vec<_>>());
+                Chunk::new(sigil::FAS, render::COMPONENT, payload)
+            }
+            Molecule::Table(t)      => {
+                let header_refs: Vec<&str> = t.headers.iter().map(|s| s.as_str()).collect();
+                let rows: Vec<Vec<Chunk>> = t.rows.iter()
+                    .map(|row| row.iter().map(|s| Chunk::text(s)).collect())
+                    .collect();
+                table_chunk(&header_refs, rows)
+            }
+            Molecule::Unknown { sigil, render, payload } =>
+                Chunk::new(*sigil, *render, payload.clone()),
+        }
+    }
+}
+
+// ── private helpers ───────────────────────────────────────────────────────────
+
+fn str_payload(payload: &[u8]) -> String {
+    String::from_utf8_lossy(payload).into_owned()
+}
+
+fn kv_str(m: &HashMap<String, Chunk>, key: &str, default: &str) -> String {
+    m.get(key)
+        .map(|c| String::from_utf8_lossy(&c.payload).into_owned())
+        .unwrap_or_else(|| default.to_string())
+}
