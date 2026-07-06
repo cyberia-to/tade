@@ -10,3 +10,7 @@ repository = "https://github.com/cyberia-to/tape"
 bytes = "1"
 
 [dev-dependencies]
+
+[[bin]]
+name = "tape"
+path = "src/bin/tape.rs"
