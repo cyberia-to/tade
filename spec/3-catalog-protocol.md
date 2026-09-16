@@ -1,10 +1,10 @@
-# TAPE — Dialect Protocol
+# TADE — Dialect Protocol
 
 A dialect is a named vocabulary of type bytes along with their semantic
-identities, data schemas, and structural conventions. TAPE itself defines
+identities, data schemas, and structural conventions. TADE itself defines
 no dialects — they are external specifications.
 
-This document specifies how dialects declare themselves on a TAPE
+This document specifies how dialects declare themselves on a TADE
 stream and how multiple dialects coexist.
 
 ## What a dialect is
@@ -12,7 +12,7 @@ stream and how multiple dialects coexist.
 A dialect defines:
 
 - A namespace of type byte codes (subject to the reservation in
-  [2-stream-control.md](2-stream-control.md): `0x2A` (`*`) is reserved by TAPE).
+  [2-stream-control.md](2-stream-control.md): `0x2A` (`*`) is reserved by TADE).
 - The semantic identity of each defined code (e.g. "this is a
   structured error", "this is a neuron identity reference").
 - The data encoding for each code (e.g. UTF-8 text, kv struct
@@ -25,9 +25,9 @@ A dialect does not define:
 - Visual rendering. Display is the renderer's choice. The same
   dialect can be rendered by prysm one way, by a CLI fallback
   another way, by an audit-log archiver a third way.
-- Transport. Dialects are transport-agnostic; TAPE handles transport
+- Transport. Dialects are transport-agnostic; TADE handles transport
   bindings.
-- Wire framing. The frame format is fixed by TAPE.
+- Wire framing. The frame format is fixed by TADE.
 
 ## Dialect identifiers
 
@@ -57,7 +57,7 @@ their byte sequences are identical.
 
 ## Declaration
 
-A TAPE stream declares its dialect by emitting a `(*, k)` frame
+A TADE stream declares its dialect by emitting a `(*, k)` frame
 (see [2-stream-control.md](2-stream-control.md)) with the dialect
 identifier as data. The declaration SHOULD be the first frame on
 the stream.
@@ -76,7 +76,7 @@ the declared dialect's namespace until either:
 
 A stream MAY omit the `(*, k)` declaration. In that case the consumer:
 
-- MUST process `(*, *)` stream-control frames as defined by TAPE.
+- MUST process `(*, *)` stream-control frames as defined by TADE.
 - MUST skip all other frames (dialect-unknown).
 - MAY apply a default dialect out-of-band (e.g. configured at the
   consumer); this is implementation-specific and not portable.
@@ -125,8 +125,8 @@ dialect-unknown handling.
 
 ## Versioning
 
-Dialects version independently of TAPE. A v1 dialect and a v2 dialect
-of the same name are distinct dialects from TAPE's perspective: their
+Dialects version independently of TADE. A v1 dialect and a v2 dialect
+of the same name are distinct dialects from TADE's perspective: their
 identifiers are different strings, so frames are not interchangeable.
 
 Dialect authors are responsible for documenting compatibility between
@@ -136,6 +136,6 @@ versions of their own dialects.
 
 A dialect specification SHOULD include its own conformance section
 covering producer / consumer requirements for the codes it defines.
-TAPE's conformance ([4-conformance.md](4-conformance.md)) covers only
+TADE's conformance ([4-conformance.md](4-conformance.md)) covers only
 wire-level behaviour; dialect-level conformance is the dialect's
 responsibility.

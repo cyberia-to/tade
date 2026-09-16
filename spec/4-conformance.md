@@ -1,10 +1,10 @@
-# TAPE — Conformance
+# TADE — Conformance
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY in this document
 are to be interpreted as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
-TAPE's conformance covers wire-level behaviour only: framing, size varint
+TADE's conformance covers wire-level behaviour only: framing, size varint
 encoding, marker handling, stream-control frames, and dialect declaration.
 Dialect-level conformance (data schemas, structural conventions for
 specific type codes) is the responsibility of each dialect's
@@ -39,7 +39,7 @@ A conformant consumer MUST:
 - Skip frames with unrecognised type bytes without signalling an error.
 - Skip frames with fewer data bytes than declared (truncated at end
   of stream): treat as Pending.
-- Recognise the reserved type byte `*` as TAPE stream control and process
+- Recognise the reserved type byte `*` as TADE stream control and process
   `(*, *)` frames per [2-stream-control.md](2-stream-control.md).
 - Treat a stream without a `(*, k)` declaration as dialect-unknown: skip
   all non-`*` frames.
@@ -82,7 +82,7 @@ input:
 
 Test vectors live in `../conformance/vectors/`. Each vector is a pair:
 
-- `{name}.bin` — raw TAPE bytes
+- `{name}.bin` — raw TADE bytes
 - `{name}.json` — JSON descriptor of expected decoded structure
 
 ### Descriptor format
@@ -101,7 +101,7 @@ Test vectors live in `../conformance/vectors/`. Each vector is a pair:
 ```
 
 For nested frames, use `"data_frames"` instead of `"data_utf8"`.
-Nested frames are still framed bytes; TAPE's wire spec does not
+Nested frames are still framed bytes; TADE's wire spec does not
 interpret them, but conformance vectors may use nesting to exercise
 the recursive decode path.
 
@@ -123,7 +123,7 @@ An implementation MUST pass all vectors in `conformance/vectors/`:
 | `nested_data.bin` | A frame whose data contains two complete frames (recursive decode) |
 
 Dialect-specific vectors (errors, tables, kv pairs with specific keys)
-belong to the dialect's own conformance suite, not TAPE's.
+belong to the dialect's own conformance suite, not TADE's.
 
 ### Running conformance tests
 
@@ -132,5 +132,5 @@ belong to the dialect's own conformance suite, not TAPE's.
 cargo test --manifest-path impl/rust/Cargo.toml conformance
 
 # Any implementation
-tape-conformance --vectors conformance/vectors/
+tade-conformance --vectors conformance/vectors/
 ```

@@ -1,12 +1,21 @@
 [package]
-name = "tape"
+name = "tade"
 version = "0.1.0"
 edition = "2024"
-description = "TAPE — Typed Annotated Payload Exchange. A typed framed byte-stream protocol."
-license = "Cyber"
-repository = "https://github.com/cyberia-to/tape"
+description = "TADE — Typed Annotated Data Exchange. A typed framed byte-stream protocol."
+license-file = "LICENSE"
+repository = "https://github.com/cyberia-to/tade"
+readme = "README.md"
+keywords = ["protocol", "framing", "tade", "cyber"]
+categories = ["network-programming", "encoding"]
+
+[lib]
+name = "tade"
+path = "src/lib.rs"
 
 [dependencies]
 bytes = "1"
 
-[dev-dependencies]
+[[bin]]
+name = "tade"
+path = "src/bin/tade.rs"
