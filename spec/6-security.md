@@ -1,8 +1,8 @@
-# TAPE — Security Considerations
+# TADE — Security Considerations
 
 ## Scope
 
-TAPE is a framing and typing protocol only. It provides no cryptographic
+TADE is a framing and typing protocol only. It provides no cryptographic
 services. The following are explicitly out of scope:
 
 - Confidentiality (encryption)
@@ -13,7 +13,7 @@ services. The following are explicitly out of scope:
 - Forward secrecy
 
 Applications that need any of the above MUST use an appropriate transport-layer
-security mechanism (TLS, SSH, WireGuard, etc.) beneath TAPE.
+security mechanism (TLS, SSH, WireGuard, etc.) beneath TADE.
 
 ## Recommended deployment
 
@@ -22,7 +22,7 @@ security mechanism (TLS, SSH, WireGuard, etc.) beneath TAPE.
 | Local stdio (same process) | No additional security needed |
 | Local Unix socket | Filesystem permissions provide access control |
 | LAN / trusted network | TLS optional; consider network perimeter |
-| Internet-facing | TAPE over TLS (e.g. WSS, HTTPS, TLS-wrapped TCP) |
+| Internet-facing | TADE over TLS (e.g. WSS, HTTPS, TLS-wrapped TCP) |
 | AI agent communication | TLS + application-level authentication |
 
 ## Denial-of-service considerations
@@ -36,7 +36,7 @@ Nesting depth: deeply nested frames can cause stack overflows in
 recursive decoders. Consumers SHOULD enforce a maximum nesting depth.
 The RECOMMENDED default is 64 levels.
 
-Infinite streams: a TAPE stream has no built-in length or end marker.
+Infinite streams: a TADE stream has no built-in length or end marker.
 Consumers reading from unbounded sources SHOULD implement timeouts or byte
 limits.
 
@@ -46,13 +46,13 @@ past it by scanning for the next `0x1F`.
 
 ## Input sanitisation
 
-TAPE data fields are opaque bytes. Consumers that render data as text MUST
+TADE data fields are opaque bytes. Consumers that render data as text MUST
 sanitise for injection vulnerabilities appropriate to their rendering context:
 
 - HTML rendering: escape `<`, `>`, `&`, `"` in text data
 - Terminal rendering: strip or escape ANSI escape sequences in text-type frames
-- SQL: never interpolate TAPE data directly into queries
-- Shell: never pass TAPE data as shell arguments without quoting
+- SQL: never interpolate TADE data directly into queries
+- Shell: never pass TADE data as shell arguments without quoting
 
 ## Forward compatibility and unknown types
 

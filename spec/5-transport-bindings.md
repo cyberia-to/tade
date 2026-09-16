@@ -1,18 +1,18 @@
-# TAPE — Transport Bindings
+# TADE — Transport Bindings
 
-TAPE is transport-agnostic. A TAPE stream is any ordered sequence of bytes
-containing TAPE frames. This document specifies how TAPE SHOULD be carried
+TADE is transport-agnostic. A TADE stream is any ordered sequence of bytes
+containing TADE frames. This document specifies how TADE SHOULD be carried
 over common transports.
 
 ## stdio (stdin / stdout)
 
-The simplest binding. A producer writes TAPE frames to stdout; a consumer
-reads from stdin. No handshake, no framing beyond TAPE itself.
+The simplest binding. A producer writes TADE frames to stdout; a consumer
+reads from stdin. No handshake, no framing beyond TADE itself.
 
 **Producer**: write frames directly to stdout with no buffering between frames.
 Flush after each logical unit (e.g. after each command's output is complete).
 
-**Consumer**: read from stdin in a loop, feed bytes into a TAPE reader,
+**Consumer**: read from stdin in a loop, feed bytes into a TADE reader,
 process frames as they arrive.
 
 **Use cases**: CLI tools piping typed output, shell-to-terminal communication,
@@ -22,60 +22,60 @@ subprocess output capture.
 producer → stdout → pipe → consumer's stdin
 ```
 
-TAPE frames and plain text output SHOULD NOT be mixed in the same stream
+TADE frames and plain text output SHOULD NOT be mixed in the same stream
 unless the consumer is known to handle raw bytes before the first `0x1F`.
-If mixing is unavoidable, put plain text first (the TAPE decoder discards
+If mixing is unavoidable, put plain text first (the TADE decoder discards
 bytes before the first frame marker).
 
 ## TCP
 
-TAPE rides on a TCP stream with no additional framing. The TCP connection
+TADE rides on a TCP stream with no additional framing. The TCP connection
 provides ordered, reliable delivery.
 
 **Connection**: open a TCP connection. No handshake frame is required.
-**Sending**: write TAPE frames directly to the TCP socket.
-**Receiving**: feed incoming bytes into a TAPE reader; process frames as complete.
+**Sending**: write TADE frames directly to the TCP socket.
+**Receiving**: feed incoming bytes into a TADE reader; process frames as complete.
 **Reconnection**: after reconnect, both sides MUST start fresh — there is no
-sequence numbering or resume mechanism in TAPE.
+sequence numbering or resume mechanism in TADE.
 
-**Port**: no standard TAPE port is assigned. Applications choose their
+**Port**: no standard TADE port is assigned. Applications choose their
 own port or negotiate via a higher-level protocol.
 
 ## WebSocket
 
-Each WebSocket message carries one or more TAPE frames as a binary message
-(`opcode=0x02`). Text messages MUST be ignored by a TAPE consumer.
+Each WebSocket message carries one or more TADE frames as a binary message
+(`opcode=0x02`). Text messages MUST be ignored by a TADE consumer.
 
-**Sending**: write one or more TAPE frames to a single binary WebSocket message.
+**Sending**: write one or more TADE frames to a single binary WebSocket message.
 There is no requirement that a message contain exactly one frame.
 
 **Receiving**: concatenate binary message payloads and feed into a standard
-TAPE reader. Frame boundaries do not align with WebSocket message boundaries.
+TADE reader. Frame boundaries do not align with WebSocket message boundaries.
 
-**Why binary messages**: TAPE frames contain arbitrary bytes; text messages
-require valid UTF-8 which TAPE payloads do not guarantee.
+**Why binary messages**: TADE frames contain arbitrary bytes; text messages
+require valid UTF-8 which TADE payloads do not guarantee.
 
 ## HTTP response body
 
-A streaming HTTP response can carry a TAPE stream. This is useful for
+A streaming HTTP response can carry a TADE stream. This is useful for
 server-sent structured output (e.g. AI agent responses).
 
-**Request**: any method. The request body MAY contain TAPE frames (e.g. for
+**Request**: any method. The request body MAY contain TADE frames (e.g. for
 input chunks in a bidirectional exchange).
 
 **Response headers**:
 ```
-Content-Type: application/x-tape
+Content-Type: application/x-tade
 Transfer-Encoding: chunked   (for streaming)
 ```
 
-**Response body**: a sequence of TAPE frames, flushed incrementally as the
+**Response body**: a sequence of TADE frames, flushed incrementally as the
 server produces output.
 
-**End of stream**: when the HTTP response body ends, the TAPE stream ends.
+**End of stream**: when the HTTP response body ends, the TADE stream ends.
 The server SHOULD emit a `(., x)` status chunk as the last frame.
 
-**Content-Type**: `application/x-tape` is the RECOMMENDED content type.
+**Content-Type**: `application/x-tade` is the RECOMMENDED content type.
 Implementations MAY use `application/octet-stream` as a fallback.
 
 ## Unix domain socket
@@ -85,19 +85,19 @@ Suitable for local IPC between processes on the same machine.
 
 ## File
 
-A TAPE file is a regular file containing TAPE frames. No additional file
+A TADE file is a regular file containing TADE frames. No additional file
 header or magic bytes are required — the first frame's `0x1F` marker serves
 as implicit identification.
 
-**Recommended extension**: `.tape`
+**Recommended extension**: `.tade`
 
-**Reading**: open the file, feed all bytes into a TAPE reader, process frames.
+**Reading**: open the file, feed all bytes into a TADE reader, process frames.
 **Writing**: append frames to the file. No locking mechanism is specified.
 
 ## Future: QUIC
 
 QUIC streams are ordered and reliable within a stream, making them a natural
-fit for TAPE. Each QUIC stream MAY carry an independent TAPE stream (useful for
+fit for TADE. Each QUIC stream MAY carry an independent TADE stream (useful for
 multiplexing multiple terminal sessions). Specification is not yet defined.
 
 ## Binding comparison

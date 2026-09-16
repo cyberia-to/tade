@@ -1,4 +1,4 @@
-# TAPE: Typed Annotated Payload Exchange
+# TADE: Typed Annotated Data Exchange
 
 **A framing and typing protocol for structured byte streams**
 
@@ -16,13 +16,13 @@ out-of-band schema distribution and impose significant encoding overhead.
 MessagePack is compact but still schema-free. gRPC is fast but HTTP/2-only
 and binary-schema-required.
 
-TAPE fills a specific gap: **a framing protocol that carries typed, structured
+TADE fills a specific gap: **a framing protocol that carries typed, structured
 output over any ordered byte stream with zero schema distribution**. Every
 frame declares its own semantic role (sigil) and perception type (render) in
 two ASCII bytes. A table is a table on the wire, not a string that happens to
 look like one. An error is an error, not a line that might start with "ERROR:".
 
-TAPE is designed for the terminal era we are actually in: AI agents producing
+TADE is designed for the terminal era we are actually in: AI agents producing
 structured output, CLI tools piping typed data, distributed systems logging to
 stream consumers that can render, filter, and forward without parsing.
 
@@ -41,7 +41,7 @@ text that a human can read and a machine cannot parse, or print JSON that a
 machine can parse and a human cannot read. There is no third option in the
 current ecosystem.
 
-TAPE is that third option.
+TADE is that third option.
 
 ### 1.2 Why existing protocols do not solve this
 
@@ -82,7 +82,7 @@ that contains:
 - Status (done, exit code)
 
 Current systems serialize all of this to Markdown strings and hope the
-consumer knows how to parse it back. TAPE lets the agent emit each chunk
+consumer knows how to parse it back. TADE lets the agent emit each chunk
 as its actual type. The terminal renders them correctly. A downstream agent
 receives them as typed data without parsing.
 
@@ -92,7 +92,7 @@ receives them as typed data without parsing.
 
 ### 2.1 The wire is the schema
 
-TAPE frames carry their type in the frame header. A consumer that has never
+TADE frames carry their type in the frame header. A consumer that has never
 seen a producer can decode any frame. There is no schema registry, no
 `.proto` file, no OpenAPI document. The 256-byte map (§2.2) is the schema,
 and it fits in one page.
@@ -104,12 +104,12 @@ Every possible byte value is assigned a role exactly once:
 | Range | Role |
 |-------|------|
 | 0x01–0x1E | Nox ISA instruction space (reserved) |
-| 0x1F | TAPE frame marker |
+| 0x1F | TADE frame marker |
 | 0x20–0x7E | Printable ASCII: sigils and render types |
 | 0x7F | DEL (reserved) |
 | 0x80–0xFF | UTF-8 continuation/lead bytes |
 
-This means 0x1F can only appear as a frame start byte in a valid TAPE stream.
+This means 0x1F can only appear as a frame start byte in a valid TADE stream.
 No payload byte, no varint byte, no sigil or render byte can be 0x1F. Frame
 boundaries are unambiguous without escaping.
 
@@ -155,7 +155,7 @@ independent meaning that composes.
 
 ### 2.4 Zero overhead composition
 
-Frames compose by nesting: the payload of any frame is itself a valid TAPE
+Frames compose by nesting: the payload of any frame is itself a valid TADE
 byte stream. A table is a `(#, T)` frame whose payload contains schema and
 row frames. A key-value pair is a `(=, s)` frame whose payload contains a
 key annotation and a value frame of any type.
@@ -165,7 +165,7 @@ free: the outer frame's varint length already covers the inner frames.
 
 ### 2.5 Transport agnosticism
 
-TAPE is a byte-stream protocol. It makes no assumptions about the transport.
+TADE is a byte-stream protocol. It makes no assumptions about the transport.
 The same frame format works over:
 
 - Unix stdin/stdout pipes
@@ -189,7 +189,7 @@ extensions can be deployed without breaking existing consumers.
 
 ## 3. Wire format
 
-A TAPE frame is:
+A TADE frame is:
 
 ```
 ┌──────────┬───────────┬──────────────┬──────────────────┐
@@ -215,7 +215,7 @@ is 4 bytes (marker + sigil + render + zero-length varint).
 | 16 KB | 5 B | <1% |
 | 2 MB | 6 B | <1% |
 
-For typical AI output (prose + structured data), TAPE adds 3–5% overhead
+For typical AI output (prose + structured data), TADE adds 3–5% overhead
 compared to bare text. This is less than JSON's structural overhead.
 
 ---
@@ -230,9 +230,9 @@ compared to bare text. This is less than JSON's structural overhead.
 | MessagePack | implicit | yes | no | 10–30% | any |
 | MCP | implicit (JSON-RPC) | yes | no | 50–200% | SSE/HTTP |
 | NDJSON | implicit | yes | no | 30–100% | any |
-| **TAPE** | **no** | **yes** | **yes** | **<5%** | **any** |
+| **TADE** | **no** | **yes** | **yes** | **<5%** | **any** |
 
-Key differentiator: TAPE is the only protocol in this table that is
+Key differentiator: TADE is the only protocol in this table that is
 simultaneously schema-free, semantically typed, and streaming-native on
 any transport.
 
@@ -276,7 +276,7 @@ a `(~, t)` key and a value frame.
 
 This means structured fields (error level, log source, progress label) are
 encoded in the same type system as the payloads they describe. There is no
-separate "metadata encoding" — TAPE is self-describing at every level.
+separate "metadata encoding" — TADE is self-describing at every level.
 
 Example: a structured error on the wire
 
@@ -296,12 +296,12 @@ Example: a structured error on the wire
 
 ## 7. Security model
 
-TAPE provides no cryptographic services. It is a framing protocol, not a
+TADE provides no cryptographic services. It is a framing protocol, not a
 security protocol. Confidentiality, integrity, authentication, and replay
 prevention are the responsibility of the transport layer (TLS, SSH,
 WireGuard).
 
-The primary security considerations for TAPE implementations are
+The primary security considerations for TADE implementations are
 denial-of-service defenses:
 
 - **Frame size limit**: consumers SHOULD enforce a maximum frame size
@@ -311,7 +311,7 @@ denial-of-service defenses:
 - **varint overflow**: a varint longer than 10 bytes or encoding a value
   larger than 2⁶³ − 1 MUST be rejected.
 
-TAPE payloads are opaque bytes. Consumers that render payloads as HTML, SQL
+TADE payloads are opaque bytes. Consumers that render payloads as HTML, SQL
 queries, or shell commands MUST sanitize appropriately for their rendering
 context.
 
@@ -330,11 +330,11 @@ The reference implementation is a Rust crate at `impl/rust/`. It provides:
 The crate has one dependency: `bytes` for zero-copy buffer management.
 
 ```rust
-use tape::{Writer, Molecule, Text, Status};
+use tade::{Writer, Molecule, Text, Status};
 use std::io::stdout;
 
 let mut w = Writer::new(stdout());
-w.write_molecule(&Molecule::Text(Text { content: "hello, tape".into() }))?;
+w.write_molecule(&Molecule::Text(Text { content: "hello, tade".into() }))?;
 w.write_molecule(&Molecule::Status(Status { code: 0 }))?;
 ```
 
@@ -354,14 +354,14 @@ See `spec/4-conformance.md` for the full test vector specification.
 
 ## 10. Relationship to the cyber ecosystem
 
-TAPE is the byte-stream substrate for cyberia tooling. The sigil vocabulary
+TADE is the byte-stream substrate for cyberia tooling. The sigil vocabulary
 (cybermark) is shared across the cyber symbol system — the same 13 sigils
-that organize the TAPE type catalog appear in cyberlinks, particle types, and
+that organize the TADE type catalog appear in cyberlinks, particle types, and
 the Nox ISA.
 
-TAPE is designed to be cyberia-independent. The protocol specification
+TADE is designed to be cyberia-independent. The protocol specification
 (this document + `spec/`) makes no reference to cyberia, prysm, or any
-upstream system. Any application can adopt TAPE without adopting the broader
+upstream system. Any application can adopt TADE without adopting the broader
 cyber stack.
 
 ---

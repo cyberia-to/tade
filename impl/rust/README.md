@@ -1,1 +1,1 @@
-# cyber-tape\n\nTyped Annotated Payload Exchange.
+# tade\n\nTyped Annotated Data Exchange.

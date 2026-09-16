@@ -1,22 +1,22 @@
 // ---
-// tags: tape, rust, cli
+// tags: tade, rust, cli
 // crystal-type: source
 // crystal-domain: comp
 // ---
-//! tape — inspect and mint cyb-stream frames.
+//! tade — inspect and mint cyb-stream frames.
 //!
-//!   tape inspect [file]              decode a tape stream into a frame table
-//!   tape sigils                      the 13 sigils (the frame's type)
-//!   tape renders                     the 15 render kinds (how to show a payload)
-//!   tape make <sigil> <render> <s>   emit one frame to stdout
+//!   tade inspect [file]              decode a tade stream into a frame table
+//!   tade sigils                      the 13 sigils (the frame's type)
+//!   tade renders                     the 15 render kinds (how to show a payload)
+//!   tade make <sigil> <render> <s>   emit one frame to stdout
 //!
-//! A tape frame is `MARKER(0x1F) · sigil · render · varint(len) · payload`. Every
+//! A tade frame is `MARKER(0x1F) · sigil · render · varint(len) · payload`. Every
 //! durable log and every gossiped message in the stack is a run of these, so
-//! `tape inspect` is the debugger for the wire.
+//! `tade inspect` is the debugger for the wire.
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use tape::{render, sigil, Chunk, ReadResult, Reader};
+use tade::{render, sigil, Chunk, ReadResult, Reader};
 
 // ── color ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ fn banner() {
 fn help() {
     banner();
     let rows = [
-        ("inspect [file]", "decode a tape stream into a frame table (stdin if no file)"),
+        ("inspect [file]", "decode a tade stream into a frame table (stdin if no file)"),
         ("sigils", "the 13 sigils — a frame's type"),
         ("renders", "the 15 render kinds — how to show a payload"),
         ("make <sigil> <render> <s>", "emit one frame to stdout"),
@@ -178,15 +178,15 @@ fn render_byte(s: &str) -> Option<u8> {
 
 fn cmd_make(args: &[String]) {
     let (Some(s), Some(r)) = (args.first(), args.get(1)) else {
-        eprintln!("  {}: tape make <sigil> <render> [payload]", dim("usage"));
+        eprintln!("  {}: tade make <sigil> <render> [payload]", dim("usage"));
         std::process::exit(2);
     };
     let Some(sig) = sigil_byte(s) else {
-        eprintln!("  {}: unknown sigil '{s}' (try `tape sigils`)", red("error"));
+        eprintln!("  {}: unknown sigil '{s}' (try `tade sigils`)", red("error"));
         std::process::exit(2);
     };
     let Some(ren) = render_byte(r) else {
-        eprintln!("  {}: unknown render '{r}' (try `tape renders`)", red("error"));
+        eprintln!("  {}: unknown render '{r}' (try `tade renders`)", red("error"));
         std::process::exit(2);
     };
     let payload = args.get(2).cloned().unwrap_or_default();
@@ -205,7 +205,7 @@ fn main() {
         Some("make" | "encode") => cmd_make(&args[1..]),
         Some("help" | "--help" | "-h") | None => help(),
         Some(other) => {
-            eprintln!("  {}: {other}  (try: tape help)", dim("unknown"));
+            eprintln!("  {}: {other}  (try: tade help)", dim("unknown"));
             std::process::exit(2);
         }
     }

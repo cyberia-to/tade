@@ -1,8 +1,8 @@
-# TAPE — Wire Format
+# TADE — Wire Format
 
 ## Frame structure
 
-Every TAPE frame has the following layout:
+Every TADE frame has the following layout:
 
 ```
  0        1        2…           N…
@@ -29,7 +29,7 @@ preambles and mixed streams).
 
 One byte identifying the particle kind of this frame. The meaning of each type
 value is defined by the active dialect (see [3-catalog-protocol.md](3-catalog-protocol.md)).
-The value `0x2A` (`*`) is reserved by TAPE for stream control (see
+The value `0x2A` (`*`) is reserved by TADE for stream control (see
 [2-stream-control.md](2-stream-control.md)). A decoder that receives an unknown
 type MUST skip the frame (advance past the data) rather than failing.
 
@@ -60,7 +60,7 @@ Examples:
 Exactly N bytes as given by size. The data is opaque to the framing
 layer — its interpretation depends on the type byte and the active dialect.
 For composite particle types (component, table, struct), the data is itself
-a sequence of valid TAPE frames that can be decoded with the same parser.
+a sequence of valid TADE frames that can be decoded with the same parser.
 
 ## Encoding algorithm
 

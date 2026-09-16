@@ -1,4 +1,4 @@
-//! tape — Typed Annotated Payload Exchange
+//! tade — Typed Annotated Data Exchange
 //!
 //! Frame format: `0x1F | sigil | render | varint | payload`
 //!
