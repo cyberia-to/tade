@@ -328,10 +328,10 @@ impl Reader {
             match decode_varint(&self.buf, varint_start) {
                 None => return ReadResult::Pending,
                 Some((payload_len, payload_start)) => {
-                    let payload_end = payload_start + payload_len as usize;
-                    if payload_end > self.buf.len() {
-                        return ReadResult::Pending;
-                    }
+                    let payload_end = match payload_start.checked_add(payload_len as usize) {
+                        Some(end) if end <= self.buf.len() => end,
+                        _ => return ReadResult::Pending,
+                    };
                     let payload = bytes::Bytes::copy_from_slice(&self.buf[payload_start..payload_end]);
                     self.pos = payload_end;
 
@@ -682,6 +682,19 @@ mod tests {
         // Feed everything except the last byte
         let mut reader = Reader::new();
         reader.feed(&full[..full.len() - 1]);
+        assert!(matches!(reader.next_chunk(), ReadResult::Pending));
+    }
+
+    #[test]
+    fn huge_varint_length_returns_pending_instead_of_overflowing() {
+        // marker + sigil + render + a 10-byte LEB128 varint near u64::MAX as the
+        // declared payload length. payload_start + payload_len as usize must not
+        // overflow usize and panic (debug) or wrap into a bogus in-bounds range
+        // that panics on the subsequent slice (release).
+        let mut data = vec![MARKER, sigil::HAX, render::TEXT];
+        encode_varint(u64::MAX - 3, &mut data);
+        let mut reader = Reader::new();
+        reader.feed(&data);
         assert!(matches!(reader.next_chunk(), ReadResult::Pending));
     }
 
