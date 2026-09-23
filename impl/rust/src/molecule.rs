@@ -219,3 +219,321 @@ fn kv_str(m: &HashMap<String, Chunk>, key: &str, default: &str) -> String {
         .map(|c| String::from_utf8_lossy(&c.payload).into_owned())
         .unwrap_or_else(|| default.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn round_trip(m: &Molecule) -> Molecule {
+        Molecule::from_chunk(&m.to_chunk())
+    }
+
+    #[test]
+    fn text_round_trip() {
+        let m = Molecule::from_chunk(&Chunk::text("hello"));
+        match &m {
+            Molecule::Text(t) => assert_eq!(t.content, "hello"),
+            other => panic!("expected Text, got {other:?}"),
+        }
+        match round_trip(&m) {
+            Molecule::Text(t) => assert_eq!(t.content, "hello"),
+            other => panic!("expected Text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn annotation_round_trip() {
+        match Molecule::from_chunk(&Chunk::annotation("note")) {
+            Molecule::Annotation(a) => assert_eq!(a.content, "note"),
+            other => panic!("expected Annotation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn neuron_adds_missing_at_prefix() {
+        let c = Chunk::new(sigil::PAT, render::TEXT, bytes::Bytes::from_static(b"alice"));
+        match Molecule::from_chunk(&c) {
+            Molecule::Neuron(n) => assert_eq!(n.name, "@alice"),
+            other => panic!("expected Neuron, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn neuron_keeps_existing_at_prefix() {
+        let c = Chunk::new(sigil::PAT, render::TEXT, bytes::Bytes::from_static(b"@alice"));
+        match Molecule::from_chunk(&c) {
+            Molecule::Neuron(n) => assert_eq!(n.name, "@alice"),
+            other => panic!("expected Neuron, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn neuron_round_trip_preserves_at_prefix() {
+        let m = Molecule::Neuron(Neuron { name: "@alice".into() });
+        match round_trip(&m) {
+            Molecule::Neuron(n) => assert_eq!(n.name, "@alice"),
+            other => panic!("expected Neuron, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn log_round_trip() {
+        let m = Molecule::from_chunk(&Chunk::log("warn", "core", "boom"));
+        match &m {
+            Molecule::Log(l) => {
+                assert_eq!(l.level, "warn");
+                assert_eq!(l.source, "core");
+                assert_eq!(l.message, "boom");
+            }
+            other => panic!("expected Log, got {other:?}"),
+        }
+        match round_trip(&m) {
+            Molecule::Log(l) => {
+                assert_eq!(l.level, "warn");
+                assert_eq!(l.source, "core");
+                assert_eq!(l.message, "boom");
+            }
+            other => panic!("expected Log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn log_missing_fields_use_defaults() {
+        let payload = encode_nested(&[]);
+        let c = Chunk::new(sigil::DOT, render::LOG, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Log(l) => {
+                assert_eq!(l.level, "info");
+                assert_eq!(l.source, "");
+                assert_eq!(l.message, "");
+            }
+            other => panic!("expected Log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn error_round_trip() {
+        let m = Molecule::from_chunk(&Chunk::error("bad input"));
+        match &m {
+            Molecule::Error(e) => {
+                assert_eq!(e.level, "error");
+                assert_eq!(e.message, "bad input");
+            }
+            other => panic!("expected Error, got {other:?}"),
+        }
+        match round_trip(&m) {
+            Molecule::Error(e) => {
+                assert_eq!(e.level, "error");
+                assert_eq!(e.message, "bad input");
+            }
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn error_missing_message_uses_default() {
+        let payload = encode_nested(&[]);
+        let c = Chunk::new(sigil::ZAP, render::ERROR, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Error(e) => assert_eq!(e.message, "unknown error"),
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn status_round_trip() {
+        let m = Molecule::from_chunk(&Chunk::status(42));
+        match &m {
+            Molecule::Status(s) => assert_eq!(s.code, 42),
+            other => panic!("expected Status, got {other:?}"),
+        }
+        match round_trip(&m) {
+            Molecule::Status(s) => assert_eq!(s.code, 42),
+            other => panic!("expected Status, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn status_non_numeric_code_defaults_to_zero() {
+        let payload = encode_nested(&[kv("code", Chunk::text("not-a-number"))]);
+        let c = Chunk::new(sigil::DOT, render::STATUS, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Status(s) => assert_eq!(s.code, 0),
+            other => panic!("expected Status, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn progress_round_trip() {
+        let m = Molecule::from_chunk(&Chunk::progress(7, "loading", 3, 10));
+        match &m {
+            Molecule::Progress(p) => {
+                assert_eq!(p.id, 7);
+                assert_eq!(p.label, "loading");
+                assert_eq!(p.current, 3);
+                assert_eq!(p.total, 10);
+            }
+            other => panic!("expected Progress, got {other:?}"),
+        }
+        match round_trip(&m) {
+            Molecule::Progress(p) => {
+                assert_eq!(p.id, 7);
+                assert_eq!(p.label, "loading");
+                assert_eq!(p.current, 3);
+                assert_eq!(p.total, 10);
+            }
+            other => panic!("expected Progress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn progress_non_numeric_fields_default_to_zero() {
+        let payload = encode_nested(&[
+            kv("id", Chunk::text("nope")),
+            kv("current", Chunk::text("nope")),
+            kv("total", Chunk::text("nope")),
+        ]);
+        let c = Chunk::new(sigil::DOT, render::PROGRESS, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Progress(p) => {
+                assert_eq!(p.id, 0);
+                assert_eq!(p.current, 0);
+                assert_eq!(p.total, 0);
+                assert_eq!(p.label, "");
+            }
+            other => panic!("expected Progress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_extracts_label_and_target() {
+        let payload = encode_nested(&[Chunk::annotation("open"), Chunk::text("/path")]);
+        let c = Chunk::new(sigil::ZAP, render::COMPONENT, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Action(a) => {
+                assert_eq!(a.label, "open");
+                assert_eq!(a.target, "/path");
+            }
+            other => panic!("expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_missing_label_defaults_to_action() {
+        let payload = encode_nested(&[Chunk::text("/path")]);
+        let c = Chunk::new(sigil::ZAP, render::COMPONENT, payload);
+        match Molecule::from_chunk(&c) {
+            Molecule::Action(a) => {
+                assert_eq!(a.label, "action");
+                assert_eq!(a.target, "/path");
+            }
+            other => panic!("expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_round_trip() {
+        let m = Molecule::Action(Action { label: "open".into(), target: "/path".into() });
+        match round_trip(&m) {
+            Molecule::Action(a) => {
+                assert_eq!(a.label, "open");
+                assert_eq!(a.target, "/path");
+            }
+            other => panic!("expected Action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn component_round_trip_nests_children() {
+        let m = Molecule::Component(Component {
+            children: vec![
+                Molecule::Text(Text { content: "a".into() }),
+                Molecule::Annotation(Annotation { content: "b".into() }),
+            ],
+        });
+        match round_trip(&m) {
+            Molecule::Component(c) => {
+                assert_eq!(c.children.len(), 2);
+                match &c.children[0] {
+                    Molecule::Text(t) => assert_eq!(t.content, "a"),
+                    other => panic!("expected Text, got {other:?}"),
+                }
+                match &c.children[1] {
+                    Molecule::Annotation(a) => assert_eq!(a.content, "b"),
+                    other => panic!("expected Annotation, got {other:?}"),
+                }
+            }
+            other => panic!("expected Component, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scope_round_trip_nests_children() {
+        let m = Molecule::Scope(Scope {
+            children: vec![Molecule::Text(Text { content: "inner".into() })],
+        });
+        match round_trip(&m) {
+            Molecule::Scope(s) => {
+                assert_eq!(s.children.len(), 1);
+                match &s.children[0] {
+                    Molecule::Text(t) => assert_eq!(t.content, "inner"),
+                    other => panic!("expected Text, got {other:?}"),
+                }
+            }
+            other => panic!("expected Scope, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn table_round_trip() {
+        let headers = vec!["name".to_string(), "age".to_string()];
+        let rows = vec![
+            vec!["alice".to_string(), "30".to_string()],
+            vec!["bob".to_string(), "25".to_string()],
+        ];
+        let m = Molecule::Table(Table { headers: headers.clone(), rows: rows.clone() });
+        match round_trip(&m) {
+            Molecule::Table(t) => {
+                assert_eq!(t.headers, headers);
+                assert_eq!(t.rows, rows);
+            }
+            other => panic!("expected Table, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn table_decodes_from_table_chunk_helper() {
+        let chunk = table_chunk(&["a", "b"], vec![vec![Chunk::text("1"), Chunk::text("2")]]);
+        match Molecule::from_chunk(&chunk) {
+            Molecule::Table(t) => {
+                assert_eq!(t.headers, vec!["a".to_string(), "b".to_string()]);
+                assert_eq!(t.rows, vec![vec!["1".to_string(), "2".to_string()]]);
+            }
+            other => panic!("expected Table, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unrecognized_sigil_render_pair_falls_back_to_unknown() {
+        let payload = bytes::Bytes::from_static(b"raw bytes");
+        let c = Chunk::new(sigil::WUT, render::BINARY, payload.clone());
+        match Molecule::from_chunk(&c) {
+            Molecule::Unknown { sigil, render, payload: p } => {
+                assert_eq!(sigil, sigil::WUT);
+                assert_eq!(render, render::BINARY);
+                assert_eq!(p, payload);
+            }
+            other => panic!("expected Unknown, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_round_trip_preserves_bytes() {
+        let payload = bytes::Bytes::from_static(b"opaque");
+        let m = Molecule::Unknown { sigil: sigil::WUT, render: render::BINARY, payload: payload.clone() };
+        let c = m.to_chunk();
+        assert_eq!(c.sigil, sigil::WUT);
+        assert_eq!(c.render, render::BINARY);
+        assert_eq!(c.payload, payload);
+    }
+}
