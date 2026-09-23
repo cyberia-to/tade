@@ -55,9 +55,23 @@ pub enum Molecule {
     Unknown { sigil: u8, render: u8, payload: bytes::Bytes },
 }
 
+/// `Component`/`Scope` chunks nest by wrapping a payload that itself decodes
+/// to more chunks; each level costs one `from_chunk_depth` stack frame. A
+/// wire sender controls nesting depth freely (every level is just a few
+/// header bytes), so decoding must stop before the recursion can exhaust
+/// the stack instead of trusting the sender's structure.
+const MAX_MOLECULE_DEPTH: usize = 64;
+
 impl Molecule {
     /// Decode a `Chunk` into its typed `Molecule` representation.
     pub fn from_chunk(c: &Chunk) -> Self {
+        Self::from_chunk_depth(c, 0)
+    }
+
+    fn from_chunk_depth(c: &Chunk, depth: usize) -> Self {
+        if depth >= MAX_MOLECULE_DEPTH {
+            return Molecule::Unknown { sigil: c.sigil, render: c.render, payload: c.payload.clone() };
+        }
         match (c.sigil, c.render) {
             (sigil::HAX, render::TEXT) =>
                 Molecule::Text(Text { content: str_payload(&c.payload) }),
@@ -129,13 +143,13 @@ impl Molecule {
 
             (sigil::BAR, render::COMPONENT) => {
                 let children = decode_nested(&c.payload)
-                    .iter().map(Molecule::from_chunk).collect();
+                    .iter().map(|ch| Molecule::from_chunk_depth(ch, depth + 1)).collect();
                 Molecule::Component(Component { children })
             }
 
             (sigil::FAS, render::COMPONENT) => {
                 let children = decode_nested(&c.payload)
-                    .iter().map(Molecule::from_chunk).collect();
+                    .iter().map(|ch| Molecule::from_chunk_depth(ch, depth + 1)).collect();
                 Molecule::Scope(Scope { children })
             }
 
@@ -212,6 +226,62 @@ impl Molecule {
 
 fn str_payload(payload: &[u8]) -> String {
     String::from_utf8_lossy(payload).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Component`/`Scope` decode by recursing one `from_chunk_depth` stack
+    /// frame per nesting level, and a sender can nest arbitrarily deep with
+    /// only a few header bytes per level. Before the depth cap, this shape
+    /// walked the full sender-chosen depth and could exhaust the stack.
+    fn depth(m: &Molecule) -> usize {
+        match m {
+            Molecule::Component(c) => 1 + c.children.first().map_or(0, depth),
+            Molecule::Scope(s) => 1 + s.children.first().map_or(0, depth),
+            _ => 0,
+        }
+    }
+
+    #[test]
+    fn from_chunk_caps_component_nesting_depth() {
+        let mut chunk = Chunk::text("leaf");
+        for _ in 0..5_000 {
+            let payload = encode_nested(&[chunk.clone()]);
+            chunk = Chunk::new(sigil::BAR, render::COMPONENT, payload);
+        }
+        let decoded = Molecule::from_chunk(&chunk);
+        assert!(depth(&decoded) <= MAX_MOLECULE_DEPTH);
+        assert!(matches!(decoded, Molecule::Component(_)));
+    }
+
+    #[test]
+    fn from_chunk_caps_scope_nesting_depth() {
+        let mut chunk = Chunk::text("leaf");
+        for _ in 0..5_000 {
+            let payload = encode_nested(&[chunk.clone()]);
+            chunk = Chunk::new(sigil::FAS, render::COMPONENT, payload);
+        }
+        let decoded = Molecule::from_chunk(&chunk);
+        assert!(depth(&decoded) <= MAX_MOLECULE_DEPTH);
+        assert!(matches!(decoded, Molecule::Scope(_)));
+    }
+
+    #[test]
+    fn from_chunk_shallow_component_decodes_fully() {
+        let inner = Chunk::text("leaf");
+        let payload = encode_nested(&[inner]);
+        let chunk = Chunk::new(sigil::BAR, render::COMPONENT, payload);
+        let decoded = Molecule::from_chunk(&chunk);
+        match decoded {
+            Molecule::Component(c) => {
+                assert_eq!(c.children.len(), 1);
+                assert!(matches!(c.children[0], Molecule::Text(_)));
+            }
+            other => panic!("expected Component, got {other:?}"),
+        }
+    }
 }
 
 fn kv_str(m: &HashMap<String, Chunk>, key: &str, default: &str) -> String {
