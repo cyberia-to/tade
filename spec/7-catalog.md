@@ -1,13 +1,13 @@
 # Staged: Catalog content pending migration
 
-> **This file is a staging area, not a TAPE specification.**
+> **This file is a staging area, not a TADE specification.**
 >
 > The content below was previously in `2-type-catalog.md` and
 > `3-composition.md`. It is **catalog-level** content: semantic identity of
 > specific `(sigil, form)` byte pairs, payload schemas, and structural
 > conventions used by the cyberia particle vocabulary.
 >
-> TAPE itself is a byte-stream framing protocol and owns none of this. The
+> TADE itself is a byte-stream framing protocol and owns none of this. The
 > meaning of `(sigil, form)` codes belongs to whichever catalog is declared
 > on a stream. The cyberia catalog (currently bundled with prysm) is one
 > such catalog.
@@ -69,7 +69,7 @@ The cyberia catalog uses 15 ASCII alphabetic bytes as form tags.
 |------|-------|------|-------------|
 | `(#, t)` | HAX | TEXT | Plain UTF-8 text / particle content |
 | `(#, T)` | HAX | TABLE | 2D table (see Tables below) |
-| `(@, t)` | PAT | TEXT | Neuron / identity reference (`@name`) |
+| `(@, t)` | PAT | TEXT | Neuron / identity reference (`@name`); presentation, not verified authority |
 | `(~, t)` | SIG | TEXT | Annotation / label / side-info |
 | `(!, e)` | ZAP | ERROR | Typed error — payload is kv struct |
 | `(!, c)` | ZAP | COMPONENT | Action button — payload: label `(~, t)` + ref `(#, t)` |
@@ -257,7 +257,7 @@ Consumers SHOULD:
 
 ## Migration target
 
-The catalog content above belongs in a catalog spec, not in TAPE. The
+The catalog content above belongs in a catalog spec, not in TADE. The
 likely target structure once moved:
 
 ```
@@ -269,5 +269,5 @@ prysm/spec/
 └── 4-conformance.md    # catalog-level producer/consumer requirements
 ```
 
-When the move happens, this file is deleted from TAPE and the TAPE spec
+When the move happens, this file is deleted from TADE and the TADE spec
 references the catalog by name (`urn:cyberia:prysm:1` or similar).
