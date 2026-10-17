@@ -229,7 +229,7 @@ fn str_payload(payload: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod depth_cap_tests {
     use super::*;
 
     /// `Component`/`Scope` decode by recursing one `from_chunk_depth` stack
