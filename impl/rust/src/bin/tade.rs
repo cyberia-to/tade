@@ -210,3 +210,109 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk(sigil: u8, render: u8, payload: &str) -> Chunk {
+        Chunk::new(sigil, render, bytes::Bytes::from(payload.as_bytes().to_vec()))
+    }
+
+    // ── sigil_byte ───────────────────────────────────────────────────────
+
+    #[test]
+    fn sigil_byte_single_char() {
+        assert_eq!(sigil_byte("!"), Some(sigil::ZAP));
+        assert_eq!(sigil_byte("#"), Some(sigil::HAX));
+    }
+
+    #[test]
+    fn sigil_byte_by_name() {
+        assert_eq!(sigil_byte("zap"), Some(sigil::ZAP));
+        assert_eq!(sigil_byte("ZAP"), Some(sigil::ZAP));
+        assert_eq!(sigil_byte("Zap"), Some(sigil::ZAP));
+    }
+
+    #[test]
+    fn sigil_byte_rejects_unknown() {
+        assert_eq!(sigil_byte("a"), None); // single char, not a sigil byte
+        assert_eq!(sigil_byte("nonsense"), None);
+        assert_eq!(sigil_byte(""), None);
+    }
+
+    // ── render_byte ──────────────────────────────────────────────────────
+
+    #[test]
+    fn render_byte_single_char() {
+        assert_eq!(render_byte("t"), Some(render::TEXT));
+        assert_eq!(render_byte("T"), Some(render::TABLE)); // case-sensitive single-char form
+    }
+
+    #[test]
+    fn render_byte_by_name() {
+        assert_eq!(render_byte("text"), Some(render::TEXT));
+        assert_eq!(render_byte("TEXT"), Some(render::TEXT));
+        assert_eq!(render_byte("table"), Some(render::TABLE));
+    }
+
+    #[test]
+    fn render_byte_rejects_unknown() {
+        assert_eq!(render_byte("q"), None);
+        assert_eq!(render_byte("nonsense"), None);
+        assert_eq!(render_byte(""), None);
+    }
+
+    // ── preview ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn preview_text_is_quoted() {
+        let c = chunk(sigil::HAX, render::TEXT, "hello");
+        assert_eq!(preview(&c), "\"hello\"");
+    }
+
+    #[test]
+    fn preview_log_and_error_and_input_are_textual() {
+        for r in [render::LOG, render::ERROR, render::INPUT] {
+            let c = chunk(sigil::HAX, r, "line");
+            assert_eq!(preview(&c), "\"line\"");
+        }
+    }
+
+    #[test]
+    fn preview_text_replaces_newlines() {
+        let c = chunk(sigil::HAX, render::TEXT, "a\nb\nc");
+        assert_eq!(preview(&c), "\"a⏎b⏎c\"");
+    }
+
+    #[test]
+    fn preview_text_truncates_at_56_chars() {
+        let long = "x".repeat(100);
+        let c = chunk(sigil::HAX, render::TEXT, &long);
+        let out = preview(&c);
+        // quotes + 56 chars
+        assert_eq!(out.chars().count(), 58);
+        assert!(out.starts_with('"') && out.ends_with('"'));
+    }
+
+    #[test]
+    fn preview_empty_payload_is_dot() {
+        let c = chunk(sigil::HAX, render::BINARY, "");
+        assert_eq!(preview(&c), "·");
+    }
+
+    #[test]
+    fn preview_non_textual_is_hex_prefix() {
+        let c = Chunk::new(sigil::HAX, render::BINARY, bytes::Bytes::from_static(&[0xde, 0xad, 0xbe, 0xef]));
+        assert_eq!(preview(&c), "deadbeef");
+    }
+
+    #[test]
+    fn preview_non_textual_truncates_past_12_bytes() {
+        let payload: Vec<u8> = (0u8..20).collect();
+        let c = Chunk::new(sigil::HAX, render::BINARY, bytes::Bytes::from(payload));
+        let out = preview(&c);
+        assert!(out.ends_with('…'));
+        assert_eq!(out.len(), 12 * 2 + '…'.len_utf8());
+    }
+}
